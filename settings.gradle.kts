@@ -5,11 +5,16 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
+        // JitPack for usb-serial-for-android
+        maven { url = uri("https://jitpack.io") }
         // Guardian Project raw GitHub Maven (hosts info.guardianproject:arti-mobile-ex)
         maven { url = uri("https://raw.githubusercontent.com/guardianproject/gpmaven/master") }
     }

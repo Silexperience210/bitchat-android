@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Filter pour T-Beam (CP2102) et autres modules LoRa -->
+    <!-- CP2102: Silicon Labs - LilyGo T-Beam -->
+    <usb-device vendor-id="4292" product-id="60000" />  <!-- 0x10C4, 0xEA60 -->
+    
+    <!-- CH340: QinHeng - Modules DIY -->
+    <usb-device vendor-id="6790" product-id="29987" />  <!-- 0x1A86, 0x7523 -->
+    
+    <!-- FT232: FTDI -->
+    <usb-device vendor-id="1027" product-id="24597" />  <!-- 0x0403, 0x6001 -->
+    
+    <!-- Wio SX1262: Seeed Studio -->
+    <usb-device vendor-id="10342" product-id="32815" /> <!-- 0x2886, 0x802F -->
+    
+    <!-- Autres modules LoRa courants -->
+    <usb-device vendor-id="1027" product-id="24596" />  <!-- FT232R -->
+    <usb-device vendor-id="1027" product-id="24592" />  <!-- FT232BM -->
+    <usb-device vendor-id="1659" product-id="8963" />   <!-- Prolific -->
+</resources>

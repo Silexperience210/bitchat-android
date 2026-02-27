@@ -145,6 +145,13 @@ dependencies {
     // EXIF orientation handling for images
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     
+    // ===== BitChat 2.0 - LoRa Dependencies =====
+    // USB Serial for T-Beam LoRa modules
+    implementation("com.github.mik3y:usb-serial-for-android:3.7.0")
+    
+    // BouncyCastle for Noise Protocol cryptography (replaces LazySodium)
+    implementation("org.bouncycastle:bcprov-jdk15on:1.70")
+    
     // Testing
     testImplementation(libs.bundles.testing)
     androidTestImplementation(platform(libs.androidx.compose.bom))
