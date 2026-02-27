@@ -2,6 +2,7 @@ package com.bitchat.android.transport
 
 import com.bitchat.android.transport.api.*
 import com.bitchat.android.transport.ble.BLETransport
+import com.bitchat.android.reticulum.ReticulumTransport
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,12 +23,14 @@ import javax.inject.Singleton
 @Singleton
 class TransportManager @Inject constructor(
     private val bleTransport: BLETransport,
-    // private val loraTransport: LoRaTransport? = null  // Ajouté plus tard
+    private val reticulumTransport: ReticulumTransport? = null
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
     /** Liste des transports actifs */
-    private val transports = mutableListOf<BitchatTransport>(bleTransport)
+    private val transports = mutableListOf<BitchatTransport>(bleTransport).apply {
+        reticulumTransport?.let { add(it) }
+    }
     
     /** Status agrégé de tous les transports */
     private val _status = MutableStateFlow(TransportManagerStatus())
@@ -347,6 +350,9 @@ data class TransportManagerStatus(
     val loraActive: Boolean = false,
     val loraPeers: Int = 0,
     val loraQuality: Float = 0f,
+    val reticulumActive: Boolean = false,
+    val reticulumPeers: Int = 0,
+    val reticulumPaths: Int = 0,
     val totalBandwidth: Int = 0,
     val pendingPackets: Int = 0
 )
