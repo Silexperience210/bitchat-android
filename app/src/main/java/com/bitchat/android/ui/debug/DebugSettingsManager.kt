@@ -326,9 +326,13 @@ class DebugSettingsManager private constructor() {
             else "📡 BLE long range (Coded PHY) disabled"
         ))
         try {
+            // Via reflection: the wear module compiles this file against a shim without connectionManager
             com.bitchat.android.service.MeshServiceHolder.meshService?.let { svc ->
-                svc.connectionManager.applyLongRangePhyToConnections()
-                svc.connectionManager.syncLongRangeAdvertising()
+                runCatching {
+                    val cm = svc.javaClass.getMethod("getConnectionManager").invoke(svc)
+                    cm.javaClass.getMethod("applyLongRangePhyToConnections").invoke(cm)
+                    cm.javaClass.getMethod("syncLongRangeAdvertising").invoke(cm)
+                }
             }
         } catch (_: Exception) { }
     }
@@ -340,9 +344,13 @@ class DebugSettingsManager private constructor() {
             if (useS2) "📡 Coded PHY: S=2 (500 kb/s, balanced)" else "📡 Coded PHY: S=8 (125 kb/s, max range)"
         ))
         try {
+            // Via reflection: the wear module compiles this file against a shim without connectionManager
             com.bitchat.android.service.MeshServiceHolder.meshService?.let { svc ->
-                svc.connectionManager.applyLongRangePhyToConnections()
-                svc.connectionManager.syncLongRangeAdvertising()
+                runCatching {
+                    val cm = svc.javaClass.getMethod("getConnectionManager").invoke(svc)
+                    cm.javaClass.getMethod("applyLongRangePhyToConnections").invoke(cm)
+                    cm.javaClass.getMethod("syncLongRangeAdvertising").invoke(cm)
+                }
             }
         } catch (_: Exception) { }
     }
@@ -354,9 +362,13 @@ class DebugSettingsManager private constructor() {
             if (enabled) "📡 Long-range discovery (coded advertising) enabled" else "📡 Long-range discovery disabled"
         ))
         try {
+            // Via reflection: the wear module compiles this file against a shim without connectionManager
             com.bitchat.android.service.MeshServiceHolder.meshService?.let { svc ->
-                svc.connectionManager.applyLongRangePhyToConnections()
-                svc.connectionManager.syncLongRangeAdvertising()
+                runCatching {
+                    val cm = svc.javaClass.getMethod("getConnectionManager").invoke(svc)
+                    cm.javaClass.getMethod("applyLongRangePhyToConnections").invoke(cm)
+                    cm.javaClass.getMethod("syncLongRangeAdvertising").invoke(cm)
+                }
             }
         } catch (_: Exception) { }
     }
