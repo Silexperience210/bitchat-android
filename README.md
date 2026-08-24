@@ -55,7 +55,7 @@ This fork adds an optional **long-range mode** built on the Bluetooth 5 **LE Cod
 - **Discovery**: the *Long range discovery* switch runs an extra **coded extended-advertising** set so two patched devices can find each other at range; classic legacy advertising keeps running for compatibility with unpatched peers
 - **How**: `setPreferredPhy(PHY_LE_CODED, PHY_LE_CODED, S8|S2)` is requested on every GATT connection (confirmed via `onPhyUpdate`); the scanner listens on all supported PHYs
 - **Requirements**: **both peers** must run this build *and* have a Bluetooth 5 chipset with Coded PHY support (`isLeCodedPhySupported()`) — the UI labels each device `supported`/`unsupported`. If the peer rejects the PHY upgrade, the link transparently stays on the classic 1M PHY: nothing breaks
-- **Builds**: every push to `main` runs the CI — download the `Debug-apk` artifact from the latest [Actions run](https://github.com/Silexemple/bitchat-android/actions) (debug-signed universal APK, long range ON by default)
+- **Builds**: every push to `main` runs the [Android CI](https://github.com/Silexemple/bitchat-android/actions/workflows/android-build.yml) — grab the `Debug-apk` artifact from the latest run (debug-signed universal APK, long range ON by default). You can also start a build manually with **Run workflow** on that page.
 
 ## Technical Architecture
 
