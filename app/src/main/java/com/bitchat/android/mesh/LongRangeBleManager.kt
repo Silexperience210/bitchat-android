@@ -69,11 +69,12 @@ object LongRangeBleManager {
         val phyOption = if (coding() == Coding.S2)
             BluetoothDevice.PHY_OPTION_S2 else BluetoothDevice.PHY_OPTION_S8
         return try {
+            // setPreferredPhy returns a BluetoothStatusCodes int on modern SDKs (SUCCESS == 0)
             val ok = gatt.setPreferredPhy(
                 BluetoothDevice.PHY_LE_CODED_MASK,
                 BluetoothDevice.PHY_LE_CODED_MASK,
                 phyOption
-            )
+            ) == 0
             Log.i(TAG, "Coded PHY (${coding()}) requested on ${gatt.device.address} ($reason): $ok")
             ok
         } catch (e: Exception) {
