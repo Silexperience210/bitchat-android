@@ -204,6 +204,10 @@ class PowerManager private constructor(context: Context) : LifecycleEventObserve
                 .setMatchMode(ScanSettings.MATCH_MODE_STICKY)
                 .setNumOfMatches(ScanSettings.MATCH_NUM_ONE_ADVERTISEMENT)
         }
+        // Long Range: also listen on Coded PHY so coded (extended) advertisers are found
+        if (LongRangeBleManager.isPhyUpgradeEnabled()) {
+            try { builder.setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED) } catch (_: Exception) { }
+        }
         return builder.setReportDelay(0).build()
     }
 

@@ -469,6 +469,9 @@ class BluetoothGattClientManager(
         val gattCallback = object : BluetoothGattCallback() {
             override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
                 if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
+                    // Long Range (BLE 5 Coded PHY): upgrade the connection PHY if enabled.
+                    // Negotiated procedure: silently stays on 1M if the peer rejects it.
+                    try { LongRangeBleManager.applyToGatt(gatt, "connect") } catch (_: Exception) { }
                     // Request a larger MTU. Must be done before any data transfer.
                     connectionScope.launch {
                         delay(200) // A small delay can improve reliability of MTU request.
@@ -498,6 +501,29 @@ class BluetoothGattClientManager(
                 }
             }
             
+            override fun onPhyUpdate(gatt: BluetoothGatt, txPhy: Int, rxPhy: Int, status: Int) {
+                fun phyName(p: Int) = when (p) {
+                    BluetoothDevice.PHY_LE_1M -> "1M"
+                    BluetoothDevice.PHY_LE_2M -> "2M"
+                    BluetoothDevice.PHY_LE_CODED -> "Coded"
+                    else -> "?$p"
+                }
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    Log.i(TAG, "PHY update ${gatt.device.address}: tx=${phyName(txPhy)} rx=${phyName(rxPhy)}")
+                    if (txPhy == BluetoothDevice.PHY_LE_CODED || rxPhy == BluetoothDevice.PHY_LE_CODED) {
+                        try {
+                            DebugSettingsManager.getInstance().addDebugMessage(
+                                com.bitchat.android.ui.debug.DebugMessage.SystemMessage(
+                                    "📡 Long-range PHY (Coded) active on …${gatt.device.address.takeLast(5)}"
+                                )
+                            )
+                        } catch (_: Exception) { }
+                    }
+                } else {
+                    Log.w(TAG, "PHY update rejected by ${gatt.device.address} (status=$status) — peer likely lacks Coded PHY support")
+                }
+            }
+
             override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
                 val deviceAddress = gatt.device.address
 

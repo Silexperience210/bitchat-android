@@ -207,6 +207,7 @@ fun DebugSettingsSheet(
     meshService: BluetoothMeshService
 ) {
     val colorScheme = MaterialTheme.colorScheme
+
     val manager = remember { DebugSettingsManager.getInstance() }
 
     val verboseLogging by manager.verboseLoggingEnabled.collectAsState()
@@ -231,6 +232,13 @@ fun DebugSettingsSheet(
     val bleEnabled by manager.bleEnabled.collectAsState()
     val wifiAwareEnabled by manager.wifiAwareEnabled.collectAsState()
     val wifiAwareVerbose by manager.wifiAwareVerbose.collectAsState()
+
+    // BLE Long Range (Bluetooth 5 Coded PHY)
+    val longRangePhy by manager.longRangePhyEnabled.collectAsState()
+    val longRangeS2 by manager.longRangePhyS2.collectAsState()
+    val longRangeAdv by manager.longRangeAdvEnabled.collectAsState()
+    val codedPhySupported = remember { com.bitchat.android.mesh.LongRangeBleManager.isCodedPhySupported(context) }
+    val codedAdvSupported = remember { com.bitchat.android.mesh.LongRangeBleManager.isExtendedAdvSupported(context) }
 
     // Onboarding only asks for these when the toggle is already on, and it defaults to off,
     // so enabling from here has to request them or the controller never starts.
@@ -470,6 +478,59 @@ fun DebugSettingsSheet(
                             Switch(checked = bleEnabled, onCheckedChange = {
                                 manager.setBleEnabled(it)
                             })
+                        }
+                        // BLE Long Range (Bluetooth 5 Coded PHY)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Spacer(Modifier.width(24.dp))
+                            Text("Long range (Coded PHY)", fontFamily = BitchatFontFamily, modifier = Modifier.weight(1f))
+                            Text(
+                                if (codedPhySupported) "supported" else "unsupported",
+                                fontFamily = BitchatFontFamily,
+                                fontSize = 11.sp,
+                                color = colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Switch(
+                                checked = longRangePhy && codedPhySupported,
+                                enabled = codedPhySupported,
+                                onCheckedChange = { manager.setLongRangePhyEnabled(it) }
+                            )
+                        }
+                        if (longRangePhy && codedPhySupported) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Spacer(Modifier.width(24.dp))
+                                Text("Coding", fontFamily = BitchatFontFamily, modifier = Modifier.weight(1f))
+                                FilterChip(
+                                    selected = !longRangeS2,
+                                    onClick = { manager.setLongRangePhyS2(false) },
+                                    label = { Text("S=8 max range", fontFamily = BitchatFontFamily) }
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                FilterChip(
+                                    selected = longRangeS2,
+                                    onClick = { manager.setLongRangePhyS2(true) },
+                                    label = { Text("S=2 balanced", fontFamily = BitchatFontFamily) }
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Spacer(Modifier.width(24.dp))
+                                Text("Long range discovery (coded advertising)", fontFamily = BitchatFontFamily, modifier = Modifier.weight(1f))
+                                if (!codedAdvSupported) {
+                                    Text("unsupported", fontFamily = BitchatFontFamily, fontSize = 11.sp, color = colorScheme.onSurface.copy(alpha = 0.6f))
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                Switch(
+                                    checked = longRangeAdv && codedAdvSupported,
+                                    enabled = codedAdvSupported,
+                                    onCheckedChange = { manager.setLongRangeAdvEnabled(it) }
+                                )
+                            }
+                            Text(
+                                "Coded PHY adds ~12 dB link budget: up to ~4x range in line of sight, at ~1/8 throughput in S=8. Both peers must support Bluetooth 5 Coded PHY.",
+                                fontFamily = BitchatFontFamily,
+                                fontSize = 11.sp,
+                                color = colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.Wifi, contentDescription = null, tint = Color(0xFF9C27B0))

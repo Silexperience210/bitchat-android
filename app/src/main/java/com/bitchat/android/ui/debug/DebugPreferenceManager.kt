@@ -24,6 +24,10 @@ object DebugPreferenceManager {
     private const val KEY_BLE_ENABLED = "ble_enabled"
     private const val KEY_WIFI_AWARE_ENABLED = "wifi_aware_enabled"
     private const val KEY_WIFI_AWARE_VERBOSE = "wifi_aware_verbose"
+    // BLE Long Range (Bluetooth 5 Coded PHY)
+    private const val KEY_LONG_RANGE_PHY = "long_range_phy_enabled"
+    private const val KEY_LONG_RANGE_PHY_S2 = "long_range_phy_s2"
+    private const val KEY_LONG_RANGE_ADV = "long_range_adv_enabled"
 
     private lateinit var prefs: SharedPreferences
 
@@ -125,5 +129,27 @@ object DebugPreferenceManager {
 
     fun setWifiAwareVerbose(value: Boolean) {
         if (ready()) prefs.edit().putBoolean(KEY_WIFI_AWARE_VERBOSE, value).apply()
+    }
+
+    // BLE Long Range (Coded PHY)
+    fun getLongRangePhyEnabled(default: Boolean = false): Boolean =
+        if (ready()) prefs.getBoolean(KEY_LONG_RANGE_PHY, default) else default
+
+    fun setLongRangePhyEnabled(value: Boolean) {
+        if (ready()) prefs.edit().putBoolean(KEY_LONG_RANGE_PHY, value).apply()
+    }
+
+    fun getLongRangePhyS2(default: Boolean = false): Boolean =
+        if (ready()) prefs.getBoolean(KEY_LONG_RANGE_PHY_S2, default) else default
+
+    fun setLongRangePhyS2(value: Boolean) {
+        if (ready()) prefs.edit().putBoolean(KEY_LONG_RANGE_PHY_S2, value).apply()
+    }
+
+    fun getLongRangeAdvEnabled(default: Boolean = false): Boolean =
+        if (ready()) prefs.getBoolean(KEY_LONG_RANGE_ADV, default) else default
+
+    fun setLongRangeAdvEnabled(value: Boolean) {
+        if (ready()) prefs.edit().putBoolean(KEY_LONG_RANGE_ADV, value).apply()
     }
 }

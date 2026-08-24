@@ -443,6 +443,9 @@ class BluetoothGattServerManager(
         } catch (e: Exception) {
             Log.e(TAG, "Exception starting advertising: ${e.message}")
         }
+
+        // Long Range: run an additional Coded-PHY extended advertising set, if enabled
+        syncLongRangeAdvertising()
     }
     
     /**
@@ -450,6 +453,7 @@ class BluetoothGattServerManager(
      */
     @Suppress("DEPRECATION")
     private fun stopAdvertising() {
+        LongRangeBleManager.stopCodedAdvertising(context)
         if (!permissionManager.hasBluetoothPermissions() || bleAdvertiser == null) return
         try {
             advertiseCallback?.let { cb -> bleAdvertiser.stopAdvertising(cb) }
@@ -472,6 +476,23 @@ class BluetoothGattServerManager(
                 delay(100)
                 startAdvertising()
             }
+        }
+    }
+
+    /**
+     * Start/stop the long-range (Coded PHY) extended advertising set according to debug
+     * settings. Independent from the legacy advertisement, kept for compatibility.
+     * Idempotent and never throws.
+     */
+    fun syncLongRangeAdvertising() {
+        try {
+            if (isActive && isServerRoleEnabled() && LongRangeBleManager.isCodedAdvEnabled()) {
+                LongRangeBleManager.startCodedAdvertising(context, myPeerID)
+            } else {
+                LongRangeBleManager.stopCodedAdvertising(context)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "syncLongRangeAdvertising failed: ${e.message}")
         }
     }
 

@@ -94,6 +94,21 @@ class BluetoothConnectionManager(
     
     // Service state
     private var isActive = false
+
+    /**
+     * Long Range (Coded PHY): re-apply the PHY preference to all active client connections.
+     * Called when the debug setting changes.
+     */
+    fun applyLongRangePhyToConnections() {
+        try { LongRangeBleManager.applyToAllConnections(connectionTracker) } catch (_: Exception) { }
+    }
+
+    /**
+     * Long Range (Coded PHY): sync the coded advertising set with current settings/state.
+     */
+    fun syncLongRangeAdvertising() {
+        try { serverManager.syncLongRangeAdvertising() } catch (_: Exception) { }
+    }
     
     // Delegate for callbacks
     var delegate: BluetoothConnectionManagerDelegate? = null

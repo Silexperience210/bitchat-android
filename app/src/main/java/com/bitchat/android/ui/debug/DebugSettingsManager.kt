@@ -51,6 +51,16 @@ class DebugSettingsManager private constructor() {
     private val _wifiAwareVerbose = MutableStateFlow(false)
     val wifiAwareVerbose: StateFlow<Boolean> = _wifiAwareVerbose.asStateFlow()
 
+    // BLE Long Range (Bluetooth 5 Coded PHY)
+    private val _longRangePhyEnabled = MutableStateFlow(false)
+    val longRangePhyEnabled: StateFlow<Boolean> = _longRangePhyEnabled.asStateFlow()
+
+    private val _longRangePhyS2 = MutableStateFlow(false)
+    val longRangePhyS2: StateFlow<Boolean> = _longRangePhyS2.asStateFlow()
+
+    private val _longRangeAdvEnabled = MutableStateFlow(false)
+    val longRangeAdvEnabled: StateFlow<Boolean> = _longRangeAdvEnabled.asStateFlow()
+
     // Visibility of the debug sheet; gates heavy work
     private val _debugSheetVisible = MutableStateFlow(false)
     val debugSheetVisible: StateFlow<Boolean> = _debugSheetVisible.asStateFlow()
@@ -78,6 +88,9 @@ class DebugSettingsManager private constructor() {
             _bleEnabled.value = DebugPreferenceManager.getBleEnabled(true)
             _wifiAwareEnabled.value = DebugPreferenceManager.getWifiAwareEnabled(false)
             _wifiAwareVerbose.value = DebugPreferenceManager.getWifiAwareVerbose(false)
+            _longRangePhyEnabled.value = DebugPreferenceManager.getLongRangePhyEnabled(false)
+            _longRangePhyS2.value = DebugPreferenceManager.getLongRangePhyS2(false)
+            _longRangeAdvEnabled.value = DebugPreferenceManager.getLongRangeAdvEnabled(false)
         } catch (_: Exception) {
             // Preferences not ready yet; keep defaults. They will be applied on first change.
         }
@@ -303,6 +316,49 @@ class DebugSettingsManager private constructor() {
         DebugPreferenceManager.setWifiAwareVerbose(enabled)
         _wifiAwareVerbose.value = enabled
         addDebugMessage(DebugMessage.SystemMessage(if (enabled) "🔊 Wi‑Fi Aware verbose logging enabled" else "🔇 Wi‑Fi Aware verbose logging disabled"))
+    }
+
+    fun setLongRangePhyEnabled(enabled: Boolean) {
+        DebugPreferenceManager.setLongRangePhyEnabled(enabled)
+        _longRangePhyEnabled.value = enabled
+        addDebugMessage(DebugMessage.SystemMessage(
+            if (enabled) "📡 BLE long range (Coded PHY) enabled — up to ~4x range, lower throughput"
+            else "📡 BLE long range (Coded PHY) disabled"
+        ))
+        try {
+            com.bitchat.android.service.MeshServiceHolder.meshService?.let { svc ->
+                svc.connectionManager.applyLongRangePhyToConnections()
+                svc.connectionManager.syncLongRangeAdvertising()
+            }
+        } catch (_: Exception) { }
+    }
+
+    fun setLongRangePhyS2(useS2: Boolean) {
+        DebugPreferenceManager.setLongRangePhyS2(useS2)
+        _longRangePhyS2.value = useS2
+        addDebugMessage(DebugMessage.SystemMessage(
+            if (useS2) "📡 Coded PHY: S=2 (500 kb/s, balanced)" else "📡 Coded PHY: S=8 (125 kb/s, max range)"
+        ))
+        try {
+            com.bitchat.android.service.MeshServiceHolder.meshService?.let { svc ->
+                svc.connectionManager.applyLongRangePhyToConnections()
+                svc.connectionManager.syncLongRangeAdvertising()
+            }
+        } catch (_: Exception) { }
+    }
+
+    fun setLongRangeAdvEnabled(enabled: Boolean) {
+        DebugPreferenceManager.setLongRangeAdvEnabled(enabled)
+        _longRangeAdvEnabled.value = enabled
+        addDebugMessage(DebugMessage.SystemMessage(
+            if (enabled) "📡 Long-range discovery (coded advertising) enabled" else "📡 Long-range discovery disabled"
+        ))
+        try {
+            com.bitchat.android.service.MeshServiceHolder.meshService?.let { svc ->
+                svc.connectionManager.applyLongRangePhyToConnections()
+                svc.connectionManager.syncLongRangeAdvertising()
+            }
+        } catch (_: Exception) { }
     }
 
     fun setMaxConnectionsOverall(value: Int) {
