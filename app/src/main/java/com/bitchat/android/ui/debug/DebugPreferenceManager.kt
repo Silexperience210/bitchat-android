@@ -132,7 +132,7 @@ object DebugPreferenceManager {
     }
 
     // BLE Long Range (Coded PHY)
-    fun getLongRangePhyEnabled(default: Boolean = false): Boolean =
+    fun getLongRangePhyEnabled(default: Boolean = true): Boolean =
         if (ready()) prefs.getBoolean(KEY_LONG_RANGE_PHY, default) else default
 
     fun setLongRangePhyEnabled(value: Boolean) {
@@ -146,7 +146,7 @@ object DebugPreferenceManager {
         if (ready()) prefs.edit().putBoolean(KEY_LONG_RANGE_PHY_S2, value).apply()
     }
 
-    fun getLongRangeAdvEnabled(default: Boolean = false): Boolean =
+    fun getLongRangeAdvEnabled(default: Boolean = true): Boolean =
         if (ready()) prefs.getBoolean(KEY_LONG_RANGE_ADV, default) else default
 
     fun setLongRangeAdvEnabled(value: Boolean) {

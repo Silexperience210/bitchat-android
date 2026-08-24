@@ -48,11 +48,11 @@ object LongRangeBleManager {
     } catch (_: Exception) { false }
 
     fun isPhyUpgradeEnabled(): Boolean = try {
-        DebugPreferenceManager.getLongRangePhyEnabled(false)
+        DebugPreferenceManager.getLongRangePhyEnabled(true)
     } catch (_: Exception) { false }
 
     fun isCodedAdvEnabled(): Boolean = try {
-        isPhyUpgradeEnabled() && DebugPreferenceManager.getLongRangeAdvEnabled(false)
+        isPhyUpgradeEnabled() && DebugPreferenceManager.getLongRangeAdvEnabled(true)
     } catch (_: Exception) { false }
 
     fun coding(): Coding = try {

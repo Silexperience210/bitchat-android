@@ -43,6 +43,19 @@ This project is released into the public domain. See the [LICENSE](LICENSE.md) f
 - **Emergency Wipe**: Triple-tap to instantly clear all data
 - **Cross-Platform**: Binary protocol compatible with bitchat on iOS and macOS
 
+## Long Range mode (Bluetooth 5 Coded PHY)
+
+> **Fork feature** — applies to [Silexemple/bitchat-android](https://github.com/Silexemple/bitchat-android), not upstream releases.
+
+This fork adds an optional **long-range mode** built on the Bluetooth 5 **LE Coded PHY**, **enabled by default (S=8)** in this fork's builds and adjustable anytime:
+
+- **Toggle**: debug panel → **Transports** → **Long range (Coded PHY)**
+- **Coding**: `S=8 max range` (125 kb/s, ~+12 dB link budget) or `S=2 balanced` (500 kb/s, ~+5 dB)
+- **What's possible**: up to **~4× the Bluetooth range in line of sight** — hundreds of meters in open field instead of the usual ~10–50 m — at proportionally lower throughput
+- **Discovery**: the *Long range discovery* switch runs an extra **coded extended-advertising** set so two patched devices can find each other at range; classic legacy advertising keeps running for compatibility with unpatched peers
+- **How**: `setPreferredPhy(PHY_LE_CODED, PHY_LE_CODED, S8|S2)` is requested on every GATT connection (confirmed via `onPhyUpdate`); the scanner listens on all supported PHYs
+- **Requirements**: **both peers** must run this build *and* have a Bluetooth 5 chipset with Coded PHY support (`isLeCodedPhySupported()`) — the UI labels each device `supported`/`unsupported`. If the peer rejects the PHY upgrade, the link transparently stays on the classic 1M PHY: nothing breaks
+
 ## Technical Architecture
 
 ### Bluetooth Mesh Network (Offline)
