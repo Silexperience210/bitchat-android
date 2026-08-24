@@ -1,0 +1,71 @@
+name: Long-range release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build APK and publish rolling prerelease
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up pinned JDK
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: 21.0.11+10.0.LTS
+
+      - name: Set up and validate Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+
+      - name: Build debug APK (all ABIs + universal)
+        run: ./gradlew :app:assembleDebug
+
+      - name: Stage release artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          APK=$(find app/build/outputs/apk -name "*universal*debug*.apk" | head -n 1)
+          if [ -z "$APK" ]; then
+            APK=$(find app/build/outputs/apk -name "*debug*.apk" | head -n 1)
+          fi
+          echo "Using APK: $APK"
+          cp "$APK" release/bitchat-longrange.apk
+          cd release
+          sha256sum bitchat-longrange.apk > SHA256SUMS.txt
+          {
+            echo "## bitchat — build longue portée (BLE 5 Coded PHY)"
+            echo ""
+            echo "Build automatique de la branche main du fork avec le mode longue portée :"
+            echo ""
+            echo "- Coded PHY (S=8, portée max) activé par défaut — réglable dans Debug > Transports > Long range"
+            echo "- Découverte longue portée (advertising étendu codé) activée par défaut"
+            echo "- Jusqu'à ~4x la portée en visibilité directe (S=8), débit réduit d'autant"
+            echo "- Les deux appareils doivent supporter Bluetooth 5 Coded PHY"
+            echo ""
+            echo "Installation : désinstallez d'abord toute version officielle de bitchat"
+            echo "(signature différente), puis installez bitchat-longrange.apk."
+            echo "APK signée avec la clé debug — à usage de test."
+            echo ""
+            echo "Empreinte SHA-256 : voir SHA256SUMS.txt"
+          } > RELEASE_NOTES.md
+
+      - name: Publish rolling prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete longrange-latest --yes --cleanup-tag || true
+          gh release create longrange-latest \
+            release/bitchat-longrange.apk \
+            release/SHA256SUMS.txt \
+            --title "bitchat long-range (latest main)" \
+            --notes-file release/RELEASE_NOTES.md \
+            --prerelease
