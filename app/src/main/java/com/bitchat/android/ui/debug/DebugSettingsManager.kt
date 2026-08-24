@@ -88,9 +88,9 @@ class DebugSettingsManager private constructor() {
             _bleEnabled.value = DebugPreferenceManager.getBleEnabled(true)
             _wifiAwareEnabled.value = DebugPreferenceManager.getWifiAwareEnabled(false)
             _wifiAwareVerbose.value = DebugPreferenceManager.getWifiAwareVerbose(false)
-            _longRangePhyEnabled.value = DebugPreferenceManager.getLongRangePhyEnabled(false)
+            _longRangePhyEnabled.value = DebugPreferenceManager.getLongRangePhyEnabled(true)
             _longRangePhyS2.value = DebugPreferenceManager.getLongRangePhyS2(false)
-            _longRangeAdvEnabled.value = DebugPreferenceManager.getLongRangeAdvEnabled(false)
+            _longRangeAdvEnabled.value = DebugPreferenceManager.getLongRangeAdvEnabled(true)
         } catch (_: Exception) {
             // Preferences not ready yet; keep defaults. They will be applied on first change.
         }
