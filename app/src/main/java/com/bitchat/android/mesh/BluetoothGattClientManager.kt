@@ -471,13 +471,14 @@ class BluetoothGattClientManager(
                 if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
                     // Long Range (BLE 5 Coded PHY): upgrade the connection PHY if enabled.
                     // Negotiated procedure: silently stays on 1M if the peer rejects it.
-                    try { LongRangeBleManager.applyToGatt(gatt, "connect") } catch (_: Exception) { }
+                    try { LongRangeBleManager.applyToGatt(gatt, "connect", context) } catch (_: Exception) { }
                     // Request a larger MTU. Must be done before any data transfer.
                     connectionScope.launch {
                         delay(200) // A small delay can improve reliability of MTU request.
                         gatt.requestMtu(517)
                     }
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    LongRangeBleManager.clearPhy(deviceAddress)
                     if (status != BluetoothGatt.GATT_SUCCESS) {
                         Log.w(TAG, "Disconnected from $deviceAddress with error status $status (client)")
                     } else {
@@ -508,20 +509,43 @@ class BluetoothGattClientManager(
                     BluetoothDevice.PHY_LE_CODED -> "Coded"
                     else -> "?$p"
                 }
+                val address = gatt.device.address
+                LongRangeBleManager.recordPhy(address, txPhy, rxPhy, status, isClientRole = true)
+
                 if (status == BluetoothGatt.GATT_SUCCESS) {
-                    Log.i(TAG, "PHY update ${gatt.device.address}: tx=${phyName(txPhy)} rx=${phyName(rxPhy)}")
-                    if (txPhy == BluetoothDevice.PHY_LE_CODED || rxPhy == BluetoothDevice.PHY_LE_CODED) {
+                    Log.i(TAG, "PHY update $address: tx=${phyName(txPhy)} rx=${phyName(rxPhy)}")
+                    // Only claim long-range when BOTH directions are Coded; a one-way
+                    // upgrade does not give the link budget the user is being promised.
+                    val label = when (LongRangeBleManager.phyStatusOf(address)) {
+                        LongRangeBleManager.PhyStatus.CODED_BIDIRECTIONAL ->
+                            "📡 Long-range PHY (Coded) active on …${address.takeLast(5)}"
+                        LongRangeBleManager.PhyStatus.CODED_TX_ONLY ->
+                            "📡 Coded TX only on …${address.takeLast(5)} (rx=${phyName(rxPhy)})"
+                        LongRangeBleManager.PhyStatus.CODED_RX_ONLY ->
+                            "📡 Coded RX only on …${address.takeLast(5)} (tx=${phyName(txPhy)})"
+                        else -> null
+                    }
+                    if (label != null) {
                         try {
                             DebugSettingsManager.getInstance().addDebugMessage(
-                                com.bitchat.android.ui.debug.DebugMessage.SystemMessage(
-                                    "📡 Long-range PHY (Coded) active on …${gatt.device.address.takeLast(5)}"
-                                )
+                                com.bitchat.android.ui.debug.DebugMessage.SystemMessage(label)
                             )
                         } catch (_: Exception) { }
                     }
+                    // Explicit read-back: confirms the controller's current PHY rather than
+                    // trusting the update we happened to observe.
+                    try { gatt.readPhy() } catch (_: Exception) { }
                 } else {
-                    Log.w(TAG, "PHY update rejected by ${gatt.device.address} (status=$status) — peer likely lacks Coded PHY support")
+                    // Do not blame the peer: permission state, local controller, stack version
+                    // or connection state can all produce this.
+                    Log.w(TAG, "PHY update not applied on $address (status=$status); link stays on its current PHY")
                 }
+            }
+
+            override fun onPhyRead(gatt: BluetoothGatt, txPhy: Int, rxPhy: Int, status: Int) {
+                LongRangeBleManager.recordPhy(gatt.device.address, txPhy, rxPhy, status, isClientRole = true)
+                Log.d(TAG, "PHY read ${gatt.device.address}: " +
+                    "${LongRangeBleManager.phyStatusOf(gatt.device.address)}")
             }
 
             override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {

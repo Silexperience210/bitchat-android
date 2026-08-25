@@ -17,6 +17,8 @@ class DebugSettingsManager private constructor() {
     // NOTE: This singleton is referenced from mesh layer. Keep in ui.debug but avoid Compose deps.
     
     companion object {
+        private const val TAG = "DebugSettingsManager"
+
         @Volatile
         private var INSTANCE: DebugSettingsManager? = null
         
@@ -325,16 +327,39 @@ class DebugSettingsManager private constructor() {
             if (enabled) "📡 BLE long range (Coded PHY) enabled — up to ~4x range, lower throughput"
             else "📡 BLE long range (Coded PHY) disabled"
         ))
-        try {
-            // Via reflection: the wear module compiles this file against a shim without connectionManager
-            com.bitchat.android.service.MeshServiceHolder.meshService?.let { svc ->
-                runCatching {
-                    val cm = svc.javaClass.getMethod("getConnectionManager").invoke(svc)
-                    cm.javaClass.getMethod("applyLongRangePhyToConnections").invoke(cm)
-                    cm.javaClass.getMethod("syncLongRangeAdvertising").invoke(cm)
-                }
-            }
-        } catch (_: Exception) { }
+        applyLongRangeSettingsLive()
+    }
+
+    /**
+     * Push long-range settings onto the live radio. Reflection is required because the wear
+     * module compiles this file against a service shim that has no connectionManager.
+     * Failures are surfaced: the UI must never claim "enabled" when nothing was applied.
+     */
+    private fun applyLongRangeSettingsLive() {
+        val svc = try {
+            com.bitchat.android.service.MeshServiceHolder.meshService
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Mesh service unavailable", e)
+            null
+        }
+        if (svc == null) {
+            addDebugMessage(DebugMessage.SystemMessage(
+                "⚠️ Long-range setting saved, but the mesh service is not running — it will apply on next start"
+            ))
+            return
+        }
+        runCatching {
+            val cm = svc.javaClass.getMethod("getConnectionManager").invoke(svc)
+            cm.javaClass.getMethod("applyLongRangePhyToConnections").invoke(cm)
+            cm.javaClass.getMethod("syncLongRangeAdvertising").invoke(cm)
+            // Scan settings are immutable once scanning has started.
+            runCatching { cm.javaClass.getMethod("restartScanForLongRange").invoke(cm) }
+        }.onFailure { e ->
+            android.util.Log.e(TAG, "Unable to apply long-range settings live", e)
+            addDebugMessage(DebugMessage.SystemMessage(
+                "⚠️ Long-range setting saved, but live application failed — restart the mesh to apply"
+            ))
+        }
     }
 
     fun setLongRangePhyS2(useS2: Boolean) {
@@ -343,16 +368,7 @@ class DebugSettingsManager private constructor() {
         addDebugMessage(DebugMessage.SystemMessage(
             if (useS2) "📡 Coded PHY: S=2 (500 kb/s, balanced)" else "📡 Coded PHY: S=8 (125 kb/s, max range)"
         ))
-        try {
-            // Via reflection: the wear module compiles this file against a shim without connectionManager
-            com.bitchat.android.service.MeshServiceHolder.meshService?.let { svc ->
-                runCatching {
-                    val cm = svc.javaClass.getMethod("getConnectionManager").invoke(svc)
-                    cm.javaClass.getMethod("applyLongRangePhyToConnections").invoke(cm)
-                    cm.javaClass.getMethod("syncLongRangeAdvertising").invoke(cm)
-                }
-            }
-        } catch (_: Exception) { }
+        applyLongRangeSettingsLive()
     }
 
     fun setLongRangeAdvEnabled(enabled: Boolean) {
@@ -361,16 +377,7 @@ class DebugSettingsManager private constructor() {
         addDebugMessage(DebugMessage.SystemMessage(
             if (enabled) "📡 Long-range discovery (coded advertising) enabled" else "📡 Long-range discovery disabled"
         ))
-        try {
-            // Via reflection: the wear module compiles this file against a shim without connectionManager
-            com.bitchat.android.service.MeshServiceHolder.meshService?.let { svc ->
-                runCatching {
-                    val cm = svc.javaClass.getMethod("getConnectionManager").invoke(svc)
-                    cm.javaClass.getMethod("applyLongRangePhyToConnections").invoke(cm)
-                    cm.javaClass.getMethod("syncLongRangeAdvertising").invoke(cm)
-                }
-            }
-        } catch (_: Exception) { }
+        applyLongRangeSettingsLive()
     }
 
     fun setMaxConnectionsOverall(value: Int) {

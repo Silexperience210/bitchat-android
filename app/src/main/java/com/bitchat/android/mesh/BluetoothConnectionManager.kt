@@ -104,6 +104,14 @@ class BluetoothConnectionManager(
     }
 
     /**
+     * Long Range: the scanner's legacy/PHY flags are baked into ScanSettings at start time,
+     * so toggling long range has no effect on an already-running scan until it is restarted.
+     */
+    fun restartScanForLongRange() {
+        try { clientManager.restartScanning() } catch (_: Exception) { }
+    }
+
+    /**
      * Long Range (Coded PHY): sync the coded advertising set with current settings/state.
      */
     fun syncLongRangeAdvertising() {

@@ -204,9 +204,20 @@ class PowerManager private constructor(context: Context) : LifecycleEventObserve
                 .setMatchMode(ScanSettings.MATCH_MODE_STICKY)
                 .setNumOfMatches(ScanSettings.MATCH_NUM_ONE_ADVERTISEMENT)
         }
-        // Long Range: also listen on Coded PHY so coded (extended) advertisers are found
-        if (LongRangeBleManager.isPhyUpgradeEnabled()) {
-            try { builder.setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED) } catch (_: Exception) { }
+        // Long Range: also listen on Coded PHY so coded (extended) advertisers are found.
+        // setPhy() is ignored by the stack unless legacy-only filtering is turned off, and
+        // setLegacy(false) means "do not restrict to legacy" -- legacy peers are still
+        // reported, so this does not break discovery of unpatched/iOS devices.
+        if (LongRangeBleManager.isPhyUpgradeEnabled() &&
+            LongRangeBleManager.isCodedPhySupported(appContext) &&
+            LongRangeBleManager.isExtendedAdvSupported(appContext)
+        ) {
+            try {
+                builder.setLegacy(false)
+                builder.setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED)
+            } catch (e: Exception) {
+                Log.w(TAG, "Extended scan settings unavailable: ${e.message}")
+            }
         }
         return builder.setReportDelay(0).build()
     }

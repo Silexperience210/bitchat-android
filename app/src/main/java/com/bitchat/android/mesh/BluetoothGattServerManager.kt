@@ -193,6 +193,13 @@ class BluetoothGattServerManager(
                         )
                         connectionTracker.addDeviceConnection(device.address, deviceConn)
 
+                        // Long Range: request Coded PHY from the server role too, and read back
+                        // what the controller actually settled on.
+                        gattServer?.let { server ->
+                            LongRangeBleManager.applyToGattServer(server, device, context, "server-connect")
+                            try { server.readPhy(device) } catch (_: Exception) { }
+                        }
+
                         connectionScope.launch {
                             delay(1000)
                             if (isActive) { // Check if still active
@@ -202,6 +209,7 @@ class BluetoothGattServerManager(
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         Log.i(TAG, "Disconnected from ${device.address} (server)")
+                        LongRangeBleManager.clearPhy(device.address)
                         val linkID = serverLinkIDs.remove(device.address)
                         // Capture the observed peer before cleanup drops the address mapping.
                         val disconnectedPeerID = connectionTracker.addressPeerMap[device.address]
@@ -212,6 +220,20 @@ class BluetoothGattServerManager(
                         delegate?.onDeviceDisconnected(device, linkID, disconnectedPeerID)
                     }
                 }
+            }
+
+            override fun onPhyUpdate(device: BluetoothDevice, txPhy: Int, rxPhy: Int, status: Int) {
+                if (!isActive) return
+                LongRangeBleManager.recordPhy(device.address, txPhy, rxPhy, status, isClientRole = false)
+                Log.i(TAG, "PHY update (server) ${device.address}: " +
+                    "${LongRangeBleManager.phyStatusOf(device.address)} (status=$status)")
+            }
+
+            override fun onPhyRead(device: BluetoothDevice, txPhy: Int, rxPhy: Int, status: Int) {
+                if (!isActive) return
+                LongRangeBleManager.recordPhy(device.address, txPhy, rxPhy, status, isClientRole = false)
+                Log.d(TAG, "PHY read (server) ${device.address}: " +
+                    "${LongRangeBleManager.phyStatusOf(device.address)}")
             }
             
             override fun onServiceAdded(status: Int, service: BluetoothGattService) {
