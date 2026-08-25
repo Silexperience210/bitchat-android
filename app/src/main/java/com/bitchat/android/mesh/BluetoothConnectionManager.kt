@@ -96,11 +96,14 @@ class BluetoothConnectionManager(
     private var isActive = false
 
     /**
-     * Long Range (Coded PHY): re-apply the PHY preference to all active client connections.
+     * Long Range (Coded PHY): re-apply the PHY preference to all active connections
+     * (client role via BluetoothGatt, server role via the GATT server handle).
      * Called when the debug setting changes.
      */
     fun applyLongRangePhyToConnections() {
-        try { LongRangeBleManager.applyToAllConnections(connectionTracker, context) } catch (_: Exception) { }
+        try {
+            LongRangeBleManager.applyToAllConnections(connectionTracker, context, serverManager.getGattServer())
+        } catch (_: Exception) { }
     }
 
     /**

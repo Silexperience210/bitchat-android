@@ -366,6 +366,27 @@ class BluetoothGattClientManager(
     }
     
     /**
+     * True if this scan result was received on the LE Coded PHY (primary or secondary).
+     */
+    private fun isOnCodedPhy(result: ScanResult): Boolean =
+        result.primaryPhy == BluetoothDevice.PHY_LE_CODED ||
+        result.secondaryPhy == BluetoothDevice.PHY_LE_CODED
+
+    /**
+     * RSSI threshold for a given scan result. Coded PHY (S=8) links are designed to work
+     * down to about -110 dBm, well below the power-mode thresholds (-95..-65 dBm), so the
+     * filter is relaxed for results received on the Coded PHY when long range is enabled.
+     * Unchanged for 1M results.
+     */
+    private fun rssiThresholdFor(result: ScanResult): Int {
+        return if (isOnCodedPhy(result) && LongRangeBleManager.isPhyUpgradeEnabled()) {
+            (powerManager.getRSSIThreshold() - 20).coerceAtLeast(-115)
+        } else {
+            powerManager.getRSSIThreshold()
+        }
+    }
+
+    /**
      * Handle scan result and initiate connection if appropriate
      */
     private fun handleScanResult(result: ScanResult) {
@@ -408,13 +429,15 @@ class BluetoothGattClientManager(
                     deviceName = device.name,
                     deviceAddress = deviceAddress,
                     rssi = rssi,
-                    peerID = peerID // Use the discovered peerID if available
+                    peerID = peerID, // Use the discovered peerID if available
+                    primaryPhy = result.primaryPhy,
+                    isLegacy = result.isLegacy
                 )
             )
         } catch (_: Exception) { }
         
-        // Power-aware RSSI filtering
-        if (rssi < powerManager.getRSSIThreshold()) {
+        // Power-aware RSSI filtering (relaxed for Coded PHY, see rssiThresholdFor)
+        if (rssi < rssiThresholdFor(result)) {
             // Even if we skip connecting, still publish scan result to debug UI
             try {
                 DebugSettingsManager.getInstance().addScanResult(
@@ -422,7 +445,9 @@ class BluetoothGattClientManager(
                         deviceName = device.name,
                         deviceAddress = deviceAddress,
                         rssi = rssi,
-                        peerID = peerID
+                        peerID = peerID,
+                        primaryPhy = result.primaryPhy,
+                        isLegacy = result.isLegacy
                     )
                 )
             } catch (_: Exception) { }
@@ -450,15 +475,24 @@ class BluetoothGattClientManager(
         
         // Add pending connection and start connection
         if (connectionTracker.addPendingConnection(deviceAddress)) {
-            connectToDevice(device, rssi, peerID)
+            connectToDevice(device, rssi, peerID, discoveredOnCodedPhy = isOnCodedPhy(result))
         }
     }
     
     /**
      * Connect to a device as GATT client
+     *
+     * @param discoveredOnCodedPhy true when the peer was discovered via Coded PHY advertising;
+     *        the connection is then initiated with the Coded PHY mask (API 26 overload) so the
+     *        controller can reach peers that only advertise on the Coded PHY.
      */
     @Suppress("DEPRECATION")
-    private fun connectToDevice(device: BluetoothDevice, rssi: Int, peerID: String? = null) {
+    private fun connectToDevice(
+        device: BluetoothDevice,
+        rssi: Int,
+        peerID: String? = null,
+        discoveredOnCodedPhy: Boolean = false
+    ) {
         if (!isClientRoleEnabled()) return
         if (!permissionManager.hasBluetoothPermissions()) return
 
@@ -639,7 +673,16 @@ class BluetoothGattClientManager(
         }
         
         try {
-            val gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            val gatt = if (discoveredOnCodedPhy) {
+                // API 26 overload with PHY mask: lets the controller initiate the connection
+                // on the Coded PHY, required for peers only reachable via Coded advertising.
+                device.connectGatt(
+                    context, false, gattCallback, BluetoothDevice.TRANSPORT_LE,
+                    BluetoothDevice.PHY_LE_CODED_MASK
+                )
+            } else {
+                device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            }
             if (gatt == null) {
                 Log.e(TAG, "connectGatt returned null for $deviceAddress")
                 // keep the pending connection so we can avoid too many reconnections attempts, TODO: needs testing

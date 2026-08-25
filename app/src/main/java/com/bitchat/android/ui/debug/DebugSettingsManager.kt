@@ -723,6 +723,8 @@ data class DebugScanResult(
     val deviceAddress: String,
     val rssi: Int,
     val peerID: String?,
+    val primaryPhy: Int = 0,      // ScanResult.getPrimaryPhy(): 1M / CODED
+    val isLegacy: Boolean = true, // false = extended advertising (BLE 5)
     val timestamp: Date = Date()
 )
 

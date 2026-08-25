@@ -8,6 +8,8 @@ import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertisingSetCallback
 import android.bluetooth.le.AdvertisingSetParameters
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelUuid
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -159,13 +161,27 @@ object LongRangeBleManager {
         }
     }
 
-    /** Re-apply the current PHY preference to every active client connection. */
-    fun applyToAllConnections(connectionTracker: BluetoothConnectionTracker, context: Context? = null) {
+    /**
+     * Re-apply the current PHY preference to every active connection, in both roles.
+     * Server-role connections go through [gattServer] (they have no BluetoothGatt handle);
+     * when the feature is toggled off their PHY is restored to the 1M stack default too.
+     */
+    fun applyToAllConnections(
+        connectionTracker: BluetoothConnectionTracker,
+        context: Context? = null,
+        gattServer: android.bluetooth.BluetoothGattServer? = null
+    ) {
         val enabled = isPhyUpgradeEnabled()
         connectionTracker.getConnectedDevices().values.forEach { dc ->
             val gatt = dc.gatt
             if (dc.isClient && gatt != null) {
                 if (enabled) applyToGatt(gatt, "settings-changed", context) else restoreDefaultPhy(gatt)
+            } else if (!dc.isClient && gattServer != null) {
+                if (enabled && context != null) {
+                    applyToGattServer(gattServer, dc.device, context, "settings-changed")
+                } else if (!enabled) {
+                    restoreDefaultPhyServer(gattServer, dc.device)
+                }
             }
         }
     }
@@ -182,15 +198,41 @@ object LongRangeBleManager {
         } catch (_: Exception) { }
     }
 
+    /** Restore the stack default (1M) PHY preference on a server-role connection. */
+    @SuppressLint("MissingPermission")
+    private fun restoreDefaultPhyServer(server: android.bluetooth.BluetoothGattServer, device: BluetoothDevice) {
+        try {
+            server.setPreferredPhy(
+                device,
+                BluetoothDevice.PHY_LE_1M_MASK,
+                BluetoothDevice.PHY_LE_1M_MASK,
+                BluetoothDevice.PHY_OPTION_NO_PREFERRED
+            )
+            Log.i(TAG, "PHY restored to 1M (server) on ${device.address}")
+        } catch (_: Exception) { }
+    }
+
     // --- Coded extended advertising (long-range discovery) ---
 
     enum class AdvState { STOPPED, STARTING, RUNNING, FAILED }
+
+    // Self-healing coded-advertising recovery tuning (mirrors the legacy advertiser pattern)
+    private const val ADV_RETRY_BASE_MS = 3_000L       // first retry delay
+    private const val ADV_RETRY_MAX_DELAY_MS = 30_000L // cap on backoff delay
 
     private val advLock = Any()
     private var codedAdvCallback: AdvertisingSetCallback? = null
     private var codedAdvSet: android.bluetooth.le.AdvertisingSet? = null
     private val _codedAdvState = MutableStateFlow(AdvState.STOPPED)
     val codedAdvState: StateFlow<AdvState> = _codedAdvState.asStateFlow()
+
+    // Retry state: the object has no CoroutineScope, so retries are posted on the main handler.
+    private val advHandler by lazy { Handler(Looper.getMainLooper()) }
+    private var advRetryCount = 0
+    private var advRetryRunnable: Runnable? = null
+    // Last start parameters, kept (application context only) so a retry can re-arm the set.
+    private var advContext: Context? = null
+    private var advPeerID: String? = null
 
     /**
      * Start a non-legacy, connectable advertising set on Coded PHY, in parallel with
@@ -214,6 +256,10 @@ object LongRangeBleManager {
         }
         val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         val advertiser = try { bm.adapter?.bluetoothLeAdvertiser } catch (_: Exception) { null } ?: return
+
+        // Remember start parameters (application context only) so transient failures can retry.
+        advContext = context.applicationContext
+        advPeerID = myPeerID
 
         // Peer identity must be exactly 16 hex chars -> 8 bytes. Advertising an empty or
         // truncated identity produces peers nobody can route to, so refuse instead.
@@ -255,12 +301,18 @@ object LongRangeBleManager {
             ) {
                 if (status == ADVERTISE_SUCCESS) {
                     synchronized(advLock) { codedAdvSet = advertisingSet }
+                    cancelCodedAdvRetry()
+                    advRetryCount = 0
                     _codedAdvState.value = AdvState.RUNNING
                     Log.i(TAG, "Coded long-range advertising started (txPower=$txPower dBm)")
                 } else {
                     synchronized(advLock) { codedAdvCallback = null; codedAdvSet = null }
                     _codedAdvState.value = AdvState.FAILED
                     Log.e(TAG, "Coded advertising failed to start: status=$status")
+                    // Previously this was terminal: the device stayed undiscoverable on the
+                    // Coded PHY until a manual toggle. Retry with backoff like the legacy
+                    // advertiser does (e.g. transient TOO_MANY_ADVERTISERS).
+                    scheduleCodedAdvRetry("start-failed-$status")
                 }
             }
 
@@ -280,24 +332,67 @@ object LongRangeBleManager {
             synchronized(advLock) { codedAdvCallback = null }
             _codedAdvState.value = AdvState.FAILED
             Log.e(TAG, "startAdvertisingSet exception: ${e.message}")
+            scheduleCodedAdvRetry("start-exception")
         }
+    }
+
+    /**
+     * Schedule a coded-advertising restart with exponential backoff (3s, doubling up to 30s),
+     * mirroring the legacy advertiser's scheduleAdvertiseRestart(). The retry re-checks that
+     * the feature is still enabled and no set is starting/running before re-arming.
+     */
+    private fun scheduleCodedAdvRetry(reason: String) {
+        val ctx = advContext ?: return
+        val peerID = advPeerID ?: return
+        advRetryCount++
+        // Exponent capped so the shift cannot overflow on persistently failing radios.
+        val delayMs = (ADV_RETRY_BASE_MS shl (advRetryCount - 1).coerceAtMost(10))
+            .coerceAtMost(ADV_RETRY_MAX_DELAY_MS)
+        Log.w(TAG, "Scheduling coded advertising restart in ${delayMs}ms (attempt $advRetryCount, reason=$reason)")
+        cancelCodedAdvRetry()
+        val retry = Runnable {
+            val alreadyActive = synchronized(advLock) { codedAdvCallback != null }
+            if (!alreadyActive && isCodedAdvEnabled()) {
+                startCodedAdvertising(ctx, peerID)
+            }
+        }
+        advRetryRunnable = retry
+        try { advHandler.postDelayed(retry, delayMs) } catch (_: Exception) { }
+    }
+
+    private fun cancelCodedAdvRetry() {
+        advRetryRunnable?.let {
+            try { advHandler.removeCallbacks(it) } catch (_: Exception) { }
+        }
+        advRetryRunnable = null
     }
 
     /** Stop the coded advertising set if running. Safe to call anytime. */
     @SuppressLint("MissingPermission")
     fun stopCodedAdvertising(context: Context) {
-        val cb = synchronized(advLock) {
-            val c = codedAdvCallback ?: return
-            codedAdvCallback = null
-            codedAdvSet = null
-            c
-        }
-        _codedAdvState.value = AdvState.STOPPED
+        stopCodedAdvertisingInternal(context.applicationContext, allowStopRetry = true)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun stopCodedAdvertisingInternal(context: Context, allowStopRetry: Boolean) {
+        cancelCodedAdvRetry()
+        advRetryCount = 0
+        // Keep the callback reference until onAdvertisingSetStopped clears it: clearing it
+        // before stopAdvertisingSet() would orphan a live set on the controller (leak, and
+        // eventually TOO_MANY_ADVERTISERS) if the stop call throws.
+        val cb = synchronized(advLock) { codedAdvCallback } ?: return
         try {
             val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
             bm.adapter?.bluetoothLeAdvertiser?.stopAdvertisingSet(cb)
         } catch (e: Exception) {
-            Log.w(TAG, "stopAdvertisingSet exception: ${e.message}")
+            Log.w(TAG, "stopAdvertisingSet exception: ${e.message}" + if (allowStopRetry) "; retrying stop once" else "")
+            if (allowStopRetry) {
+                // The set may still be running controller-side; retry the stop once with the
+                // retained callback instead of dropping the reference.
+                try {
+                    advHandler.postDelayed({ stopCodedAdvertisingInternal(context, allowStopRetry = false) }, 1_000L)
+                } catch (_: Exception) { }
+            }
         }
     }
 }
