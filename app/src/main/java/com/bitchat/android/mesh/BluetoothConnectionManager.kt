@@ -100,7 +100,7 @@ class BluetoothConnectionManager(
      * Called when the debug setting changes.
      */
     fun applyLongRangePhyToConnections() {
-        try { LongRangeBleManager.applyToAllConnections(connectionTracker) } catch (_: Exception) { }
+        try { LongRangeBleManager.applyToAllConnections(connectionTracker, context) } catch (_: Exception) { }
     }
 
     /**

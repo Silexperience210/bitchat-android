@@ -239,6 +239,10 @@ fun DebugSettingsSheet(
     val longRangeAdv by manager.longRangeAdvEnabled.collectAsState()
     val codedPhySupported = remember { com.bitchat.android.mesh.LongRangeBleManager.isCodedPhySupported(context) }
     val codedAdvSupported = remember { com.bitchat.android.mesh.LongRangeBleManager.isExtendedAdvSupported(context) }
+    // Live PHY registry (per connected address) and coded-advertising lifecycle state —
+    // collected here so the sheet actually SHOWS what the radio is doing, not just logs it.
+    val activePhy by com.bitchat.android.mesh.LongRangeBleManager.activePhy.collectAsState()
+    val codedAdvState by com.bitchat.android.mesh.LongRangeBleManager.codedAdvState.collectAsState()
 
     // Onboarding only asks for these when the toggle is already on, and it defaults to off,
     // so enabling from here has to request them or the controller never starts.
@@ -530,6 +534,19 @@ fun DebugSettingsSheet(
                                 fontFamily = BitchatFontFamily,
                                 fontSize = 11.sp,
                                 color = colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                            // Live state of the coded advertising set (only meaningful when discovery is on).
+                            val advStateLabel = when (codedAdvState) {
+                                com.bitchat.android.mesh.LongRangeBleManager.AdvState.RUNNING -> "📡 Discovery active"
+                                com.bitchat.android.mesh.LongRangeBleManager.AdvState.STARTING -> "📡 Starting…"
+                                com.bitchat.android.mesh.LongRangeBleManager.AdvState.FAILED -> "⚠️ Discovery failed"
+                                com.bitchat.android.mesh.LongRangeBleManager.AdvState.STOPPED -> "Discovery off"
+                            }
+                            Text(
+                                advStateLabel,
+                                fontFamily = BitchatFontFamily,
+                                fontSize = 11.sp,
+                                color = if (codedAdvState == com.bitchat.android.mesh.LongRangeBleManager.AdvState.RUNNING) Color(0xFF4CAF50) else colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -923,7 +940,17 @@ fun DebugSettingsSheet(
                                         Column(Modifier.weight(1f)) {
                                             Text((dev.peerID ?: stringResource(R.string.unknown)) + " • ${dev.deviceAddress}", fontFamily = BitchatFontFamily, fontSize = 12.sp)
                                             val roleLabel = if (dev.connectionType == ConnectionType.GATT_SERVER) stringResource(R.string.debug_role_server) else stringResource(R.string.debug_role_client)
-                                            Text("${dev.nickname ?: ""} • " + stringResource(R.string.debug_rssi_fmt, dev.rssi ?: stringResource(R.string.debug_question_mark)) + " • $roleLabel" + (if (dev.isDirectConnection) stringResource(R.string.debug_direct_suffix) else ""), fontFamily = BitchatFontFamily, fontSize = 11.sp, color = colorScheme.onSurface.copy(alpha = 0.7f))
+                                            val phy = activePhy[dev.deviceAddress]?.phyStatus
+                                            val phyLabel = when (phy) {
+                                                com.bitchat.android.mesh.LongRangeBleManager.PhyStatus.CODED_BIDIRECTIONAL -> "📡 Coded"
+                                                com.bitchat.android.mesh.LongRangeBleManager.PhyStatus.CODED_TX_ONLY -> "📡 Coded TX"
+                                                com.bitchat.android.mesh.LongRangeBleManager.PhyStatus.CODED_RX_ONLY -> "📡 Coded RX"
+                                                com.bitchat.android.mesh.LongRangeBleManager.PhyStatus.PHY_2M -> "2M"
+                                                com.bitchat.android.mesh.LongRangeBleManager.PhyStatus.PHY_1M -> "1M"
+                                                com.bitchat.android.mesh.LongRangeBleManager.PhyStatus.UPDATE_FAILED -> "⚠️ PHY"
+                                                else -> null
+                                            }
+                                            Text("${dev.nickname ?: ""} • " + stringResource(R.string.debug_rssi_fmt, dev.rssi ?: stringResource(R.string.debug_question_mark)) + " • $roleLabel" + (if (dev.isDirectConnection) stringResource(R.string.debug_direct_suffix) else "") + (phyLabel?.let { " • $it" } ?: ""), fontFamily = BitchatFontFamily, fontSize = 11.sp, color = colorScheme.onSurface.copy(alpha = 0.7f))
                                         }
                                         Text(stringResource(R.string.debug_disconnect), color = Color(0xFFBF1A1A), fontFamily = BitchatFontFamily, modifier = Modifier.clickable {
                                             meshService.connectionManager.disconnectAddress(dev.deviceAddress)

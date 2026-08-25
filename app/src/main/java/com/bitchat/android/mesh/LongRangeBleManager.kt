@@ -160,12 +160,12 @@ object LongRangeBleManager {
     }
 
     /** Re-apply the current PHY preference to every active client connection. */
-    fun applyToAllConnections(connectionTracker: BluetoothConnectionTracker) {
+    fun applyToAllConnections(connectionTracker: BluetoothConnectionTracker, context: Context? = null) {
         val enabled = isPhyUpgradeEnabled()
         connectionTracker.getConnectedDevices().values.forEach { dc ->
             val gatt = dc.gatt
             if (dc.isClient && gatt != null) {
-                if (enabled) applyToGatt(gatt, "settings-changed") else restoreDefaultPhy(gatt)
+                if (enabled) applyToGatt(gatt, "settings-changed", context) else restoreDefaultPhy(gatt)
             }
         }
     }
